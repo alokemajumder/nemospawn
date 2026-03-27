@@ -53,5 +53,5 @@ def test_coordination_includes_messaging():
 def test_build_system_prompt_without_context():
     prompt = build_system_prompt()
     # Should still have base system prompt but no coordination injection
-    assert "NemoSpawn worker agent" in prompt
-    assert "Plan Approval" not in prompt
+    assert "NemoSpawn agent" in prompt
+    assert "Leader Commands" not in prompt

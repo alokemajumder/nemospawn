@@ -10,7 +10,7 @@ from nemospawn.openshell.sandbox import SandboxConfig
 
 def test_build_system_prompt_standalone():
     prompt = build_system_prompt()
-    assert "NemoSpawn worker agent" in prompt
+    assert "NemoSpawn agent" in prompt
     assert "NeMo Framework" in prompt
     assert "Triton" in prompt
     assert "Team: " not in prompt  # no team-specific injection without team_id

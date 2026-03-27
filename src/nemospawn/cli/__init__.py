@@ -14,6 +14,7 @@ from nemospawn.cli import artifact, nim, hpo, cluster, launch  # noqa: E402
 from nemospawn.cli import ngc, slurm, auth  # noqa: E402
 from nemospawn.cli import plan, lifecycle, cost, snapshot, watch  # noqa: E402
 from nemospawn.cli import profile, config, schedule, skill  # noqa: E402
+from nemospawn.cli import workspace  # noqa: E402
 
 app.add_typer(team.app, name="team", help="Team lifecycle management")
 app.add_typer(spawn.app, name="spawn", help="Agent spawn and management")
@@ -38,6 +39,7 @@ app.add_typer(profile.app, name="profile", help="Agent profile management")
 app.add_typer(config.app, name="config", help="Configuration management")
 app.add_typer(schedule.app, name="schedule", help="Adaptive task scheduling")
 app.add_typer(skill.app, name="skill", help="Agent skill management")
+app.add_typer(workspace.app, name="workspace", help="Git worktree management")
 
 
 @app.command()
