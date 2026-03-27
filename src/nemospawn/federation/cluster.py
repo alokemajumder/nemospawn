@@ -104,15 +104,17 @@ def spawn_remote_agent(
     task: str = "",
 ) -> bool:
     """Spawn a NemoSpawn agent on a remote cluster via SSH + tmux."""
+    import shlex
+
     ssh_args = _build_ssh_args(cluster)
     gpu_str = ",".join(str(g) for g in gpu_ids)
-    tmux_session = f"nemo-{team_id}-{agent_id}"
+    tmux_session = shlex.quote(f"nemo-{team_id}-{agent_id}")
 
-    # Create tmux session on remote
+    # Sanitize all values passed to the remote shell
     remote_cmd = (
-        f"CUDA_VISIBLE_DEVICES={gpu_str} "
-        f"NEMOSPAWN_TEAM={team_id} "
-        f"NEMOSPAWN_AGENT={agent_id} "
+        f"CUDA_VISIBLE_DEVICES={shlex.quote(gpu_str)} "
+        f"NEMOSPAWN_TEAM={shlex.quote(team_id)} "
+        f"NEMOSPAWN_AGENT={shlex.quote(agent_id)} "
         f"tmux new-session -d -s {tmux_session}"
     )
 

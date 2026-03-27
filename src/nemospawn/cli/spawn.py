@@ -58,7 +58,12 @@ def spawn_agent(
     if runtime == "sandbox":
         _spawn_sandbox(team_id, agent_id, name, role, gpu_ids, task, agent_cmd, remote, team_dir)
     else:
-        _spawn_tmux(team_id, agent_id, name, role, gpu_ids, task, repo, agent_cmd, team_dir)
+        try:
+            _spawn_tmux(team_id, agent_id, name, role, gpu_ids, task, repo, agent_cmd, team_dir)
+        except (RuntimeError, FileNotFoundError) as e:
+            console.print(f"[red]Failed to spawn agent: {e}[/]")
+            console.print("[dim]Ensure tmux is installed: brew install tmux (macOS) or apt install tmux (Linux)[/]")
+            raise typer.Exit(1)
 
 
 def _spawn_tmux(
@@ -67,7 +72,11 @@ def _spawn_tmux(
     agent_cmd: str, team_dir: Path,
 ) -> None:
     """Spawn an agent in a tmux session (default mode)."""
+    from nemospawn.core.state import ensure_team_dir
     from nemospawn.runtime.tmux import create_session, send_command
+
+    # Ensure team directories exist
+    ensure_team_dir(team_id)
 
     tmux_session = f"{TMUX_PREFIX}-{team_id}-{agent_id}"
 

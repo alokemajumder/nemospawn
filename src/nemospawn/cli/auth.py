@@ -20,8 +20,10 @@ def create_user_cmd(
 ):
     """Create a new user with an API key."""
     from nemospawn.core.auth import create_user
+    from nemospawn.core.audit import log_event
 
     user, key = create_user(username, role=role)
+    log_event("user.create", {"username": username, "role": role})
     console.print(Panel(
         f"[bold]Username:[/] {user.username}\n"
         f"[bold]Role:[/] {user.role}\n"

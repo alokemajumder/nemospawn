@@ -94,8 +94,9 @@ def update_costs(team_id: str) -> CostRecord:
 
 
 def reset_costs(team_id: str) -> CostRecord:
-    """Reset cost tracking for a team."""
-    record = CostRecord(team_id=team_id)
+    """Reset cost totals for a team, preserving the custom rate."""
+    old = get_cost_record(team_id)
+    record = CostRecord(team_id=team_id, rate_per_gpu_hour=old.rate_per_gpu_hour)
     save_cost_record(record)
     return record
 

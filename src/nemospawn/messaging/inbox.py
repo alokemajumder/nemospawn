@@ -47,7 +47,6 @@ def broadcast_message(team_id: str, from_agent: str, body: str) -> list[Message]
         if agent_data and agent_data.get("agent_id") != from_agent:
             agent_id = agent_data["agent_id"]
             msg = send_message(team_id, from_agent, agent_id, body)
-            msg.to_agent = None  # mark as broadcast in the message
             messages.append(msg)
     return messages
 

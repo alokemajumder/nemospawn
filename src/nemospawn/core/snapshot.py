@@ -75,9 +75,12 @@ def restore_snapshot(team_id: str, snapshot_id: str) -> TeamSnapshot | None:
     # Restore agents
     agents_dir = team_dir / AGENTS_SUBDIR
     agents_dir.mkdir(parents=True, exist_ok=True)
-    # Clear existing
+    # Clear existing (handle concurrent access gracefully)
     for f in list_json_files(agents_dir):
-        f.unlink()
+        try:
+            f.unlink()
+        except FileNotFoundError:
+            pass
     for agent in snapshot.agents:
         agent_id = agent.get("agent_id", "unknown")
         atomic_write(agents_dir / f"{agent_id}.json", agent)
@@ -86,7 +89,10 @@ def restore_snapshot(team_id: str, snapshot_id: str) -> TeamSnapshot | None:
     tasks_dir = team_dir / TASKS_SUBDIR
     tasks_dir.mkdir(parents=True, exist_ok=True)
     for f in list_json_files(tasks_dir):
-        f.unlink()
+        try:
+            f.unlink()
+        except FileNotFoundError:
+            pass
     for task in snapshot.tasks:
         task_id = task.get("task_id", "unknown")
         atomic_write(tasks_dir / f"{task_id}.json", task)
@@ -95,7 +101,10 @@ def restore_snapshot(team_id: str, snapshot_id: str) -> TeamSnapshot | None:
     plans_dir = team_dir / PLANS_SUBDIR
     plans_dir.mkdir(parents=True, exist_ok=True)
     for f in list_json_files(plans_dir):
-        f.unlink()
+        try:
+            f.unlink()
+        except FileNotFoundError:
+            pass
     for plan in snapshot.plans:
         plan_id = plan.get("plan_id", "unknown")
         atomic_write(plans_dir / f"{plan_id}.json", plan)

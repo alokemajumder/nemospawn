@@ -10,7 +10,10 @@ console = Console(stderr=True)
 def get_gpu_health(gpu_index: int) -> dict:
     """Query NVML for GPU health metrics."""
     try:
-        import pynvml
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning, module="pynvml")
+            import pynvml
 
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_index)

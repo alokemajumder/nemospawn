@@ -1,8 +1,9 @@
 """Global configuration constants for NemoSpawn."""
 
+import os
 from pathlib import Path
 
-STATE_DIR = Path.home() / ".nemospawn"
+STATE_DIR = Path(os.environ.get("NEMOSPAWN_DATA_DIR", Path.home() / ".nemospawn"))
 TEAMS_DIR = STATE_DIR / "teams"
 HPO_DIR = STATE_DIR / "hpo"
 
