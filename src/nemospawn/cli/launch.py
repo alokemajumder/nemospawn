@@ -122,14 +122,13 @@ def launch(
 
     console.print(f"\n[green]Team created:[/] {team_id}")
 
-    # Spawn each worker
-    for w, assigned_gpus, task_desc in assignments:
-        gpu_str = ",".join(str(g) for g in assigned_gpus)
-        from nemospawn.cli.spawn import spawn_agent
-        from typer.testing import CliRunner
+    # Spawn each worker with full coordination prompt injection
+    import os
+    from nemospawn.core.models import Agent
+    from nemospawn.core.config import TMUX_PREFIX, AGENTS_SUBDIR
+    from nemospawn.openshell.prompt import build_system_prompt
 
-        # Use the spawn agent directly
-        from nemospawn.core.models import Agent
+    for w, assigned_gpus, task_desc in assignments:
         agent_id = _short_id(w.name)
 
         if runtime == "sandbox":
@@ -140,23 +139,49 @@ def launch(
                 agent_command=w.agent_cmd,
             )
         else:
-            from nemospawn.runtime.tmux import create_session
-            from nemospawn.core.config import TMUX_PREFIX, AGENTS_SUBDIR
+            from nemospawn.runtime.tmux import create_session, send_command
 
             tmux_session = f"{TMUX_PREFIX}-{team_id}-{agent_id}"
-            env = {"NEMOSPAWN_TEAM": team_id, "NEMOSPAWN_AGENT": agent_id}
+            env = {
+                "NEMOSPAWN_TEAM": team_id,
+                "NEMOSPAWN_AGENT": agent_id,
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            }
+            if os.environ.get("VIRTUAL_ENV"):
+                env["VIRTUAL_ENV"] = os.environ["VIRTUAL_ENV"]
             if assigned_gpus:
-                env["CUDA_VISIBLE_DEVICES"] = gpu_str
+                env["CUDA_VISIBLE_DEVICES"] = ",".join(str(g) for g in assigned_gpus)
+
             create_session(tmux_session, env=env)
+
+            # Inject coordination prompt (leader role gets orchestration commands)
+            coord_prompt = build_system_prompt(
+                team_id=team_id, agent_id=agent_id,
+                gpu_ids=assigned_gpus, role=w.role,
+                task_description=task_desc,
+            )
+            prompt_dir = team_dir / "prompts"
+            prompt_dir.mkdir(exist_ok=True)
+            prompt_file = prompt_dir / f"{agent_id}.md"
+            prompt_file.write_text(coord_prompt)
+            send_command(tmux_session, f"export NEMOSPAWN_PROMPT={prompt_file}")
+
+            # Launch the agent CLI via adapter
+            from nemospawn.core.profiles import load_profile, build_spawn_command
+            agent_profile = load_profile(w.agent_cmd if hasattr(w, 'agent_cmd') else "claude")
+            if agent_profile:
+                spawn_cmd = build_spawn_command(agent_profile, task=task_desc, prompt_file=str(prompt_file))
+                send_command(tmux_session, " ".join(spawn_cmd))
 
         agent = Agent(
             agent_id=agent_id, team_id=team_id, name=w.name,
             role=w.role, gpu_ids=assigned_gpus, task=task_desc,
+            tmux_session=f"{TMUX_PREFIX}-{team_id}-{agent_id}" if runtime != "sandbox" else f"nemo-{team_id}-{agent_id}",
             status="running",
         )
-        from nemospawn.core.config import AGENTS_SUBDIR
         atomic_write(team_dir / AGENTS_SUBDIR / f"{agent_id}.json", agent.to_dict())
-        console.print(f"  [green]Spawned:[/] {w.name} ({w.role}) → GPU {assigned_gpus}")
+        role_label = f"[bold cyan]{w.role}[/]" if w.role == "leader" else w.role
+        console.print(f"  [green]Spawned:[/] {w.name} ({role_label}) → GPU {assigned_gpus or 'coordinator'}")
 
     console.print(f"\n[bold green]Team '{team_id}' launched with {len(tmpl.workers)} workers[/]")
 

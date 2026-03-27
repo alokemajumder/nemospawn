@@ -20,20 +20,25 @@ def test_get_builtin_autoresearch():
     tmpl = get_builtin_template("autoresearch")
     assert tmpl is not None
     assert tmpl.name == "autoresearch"
-    assert tmpl.min_gpus == 2
-    assert len(tmpl.workers) == 3
-    assert tmpl.workers[0].role == "trainer"
-    assert tmpl.workers[2].role == "evaluator"
-    assert "trainer-0" in tmpl.workers[2].blocked_by
+    assert tmpl.min_gpus == 3
+    assert len(tmpl.workers) == 4
+    # First worker is the leader/orchestrator
+    assert tmpl.workers[0].role == "leader"
+    assert tmpl.workers[0].gpu_count == 0  # leader doesn't need GPU
+    assert tmpl.workers[1].role == "trainer"
+    assert tmpl.workers[3].role == "evaluator"
+    assert "trainer-0" in tmpl.workers[3].blocked_by
 
 
 def test_get_builtin_rlhf():
     tmpl = get_builtin_template("rlhf-swarm")
     assert tmpl is not None
     assert tmpl.min_gpus == 4
-    assert len(tmpl.workers) == 4
+    assert len(tmpl.workers) == 5
+    # First is leader
+    assert tmpl.workers[0].role == "leader"
     # Reward trainer should use 2 GPUs with NVLink
-    reward = tmpl.workers[0]
+    reward = tmpl.workers[1]
     assert reward.role == "rlhf-reward"
     assert reward.gpu_count == 2
     assert reward.require_nvlink is True
@@ -42,8 +47,10 @@ def test_get_builtin_rlhf():
 def test_get_builtin_nim_deploy():
     tmpl = get_builtin_template("nim-deploy")
     assert tmpl is not None
-    assert len(tmpl.workers) == 3
-    deployer_tp2 = tmpl.workers[1]
+    assert len(tmpl.workers) == 4
+    # First is leader
+    assert tmpl.workers[0].role == "leader"
+    deployer_tp2 = tmpl.workers[2]
     assert deployer_tp2.gpu_count == 2
     assert deployer_tp2.require_nvlink is True
 
@@ -51,7 +58,17 @@ def test_get_builtin_nim_deploy():
 def test_get_builtin_data_curation():
     tmpl = get_builtin_template("data-curation")
     assert tmpl is not None
-    assert tmpl.workers[1].blocked_by == ["curator"]
+    # First is leader
+    assert tmpl.workers[0].role == "leader"
+    assert tmpl.workers[2].blocked_by == ["curator"]
+
+
+def test_all_templates_have_leader():
+    """Every built-in template must have a leader agent for autonomous orchestration."""
+    for name in BUILTIN_TEMPLATES:
+        tmpl = get_builtin_template(name)
+        roles = [w.role for w in tmpl.workers]
+        assert "leader" in roles, f"Template '{name}' is missing a leader agent"
 
 
 def test_get_nonexistent_template():

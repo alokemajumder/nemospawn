@@ -109,26 +109,32 @@ def load_template_from_string(toml_content: str) -> TeamTemplate:
 BUILTIN_TEMPLATES: dict[str, str] = {
     "autoresearch": '''
 name = "autoresearch"
-description = "Autonomous NeMo hyperparameter research across all GPUs"
-min_gpus = 2
+description = "Autonomous NeMo hyperparameter research — leader orchestrates sub-agents across GPUs"
+min_gpus = 3
+
+[[workers]]
+name = "orchestrator"
+role = "leader"
+gpu_count = 0
+task = "Orchestrate the research team: spawn trainers on available GPUs, design experiments with varied hyperparameters, monitor GPU performance via nemospawn schedule analyze, detect underperformers and reallocate tasks, review worker plans, kill idle agents and respawn with new parameters, synthesize findings across all agents into final results"
 
 [[workers]]
 name = "trainer-0"
 role = "trainer"
 gpu_count = 1
-task = "NeMo training sweep — explore hyperparameter space"
+task = "NeMo training sweep — explore hyperparameter space, report val_loss at every checkpoint"
 
 [[workers]]
 name = "trainer-1"
 role = "trainer"
 gpu_count = 1
-task = "NeMo training sweep — explore hyperparameter space"
+task = "NeMo training sweep — explore hyperparameter space, report val_loss at every checkpoint"
 
 [[workers]]
 name = "evaluator"
 role = "evaluator"
 gpu_count = 1
-task = "Benchmark best checkpoint via Triton perf_analyzer"
+task = "Benchmark best checkpoint via Triton perf_analyzer, register artifacts"
 blocked_by = ["trainer-0", "trainer-1"]
 
 [metadata]
@@ -138,8 +144,14 @@ nvidia_stack = ["nemo", "triton"]
 
     "nim-deploy": '''
 name = "nim-deploy"
-description = "Deploy and benchmark multiple NIM container variants"
-min_gpus = 2
+description = "Deploy and benchmark NIM container variants — leader coordinates pipeline"
+min_gpus = 3
+
+[[workers]]
+name = "orchestrator"
+role = "leader"
+gpu_count = 0
+task = "Orchestrate the NIM deployment pipeline: monitor deployers, review plans, benchmark results, rank endpoints by throughput and latency, synthesize deployment report"
 
 [[workers]]
 name = "deployer-tp1"
@@ -168,8 +180,14 @@ nvidia_stack = ["nim", "triton"]
 
     "rlhf-swarm": '''
 name = "rlhf-swarm"
-description = "Full RLHF loop: reward model → PPO policy → evaluation"
+description = "Full RLHF loop with leader orchestrating reward, PPO, and eval agents"
 min_gpus = 4
+
+[[workers]]
+name = "orchestrator"
+role = "leader"
+gpu_count = 0
+task = "Orchestrate the RLHF pipeline: monitor reward training completion, spawn PPO agents, track policy improvement, detect training instabilities via GPU metrics, reallocate underperforming agents, synthesize alignment results"
 
 [[workers]]
 name = "reward-trainer"
@@ -206,8 +224,14 @@ nvidia_stack = ["nemo", "nemo-aligner"]
 
     "data-curation": '''
 name = "data-curation"
-description = "Parallel data curation + training pipeline"
+description = "Parallel data curation + training with leader coordination"
 min_gpus = 2
+
+[[workers]]
+name = "orchestrator"
+role = "leader"
+gpu_count = 0
+task = "Orchestrate data pipeline: monitor curation progress, spawn trainers when shards ready, track data quality metrics, synthesize results"
 
 [[workers]]
 name = "curator"

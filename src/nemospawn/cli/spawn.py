@@ -93,11 +93,17 @@ def _spawn_tmux(
         except RuntimeError as e:
             console.print(f"[yellow]Worktree creation failed: {e}[/]")
 
-    # Prepare environment
+    # Prepare environment — inherit PATH so nemospawn CLI is available inside tmux
+    import os
+
     env = {
         "NEMOSPAWN_TEAM": team_id,
         "NEMOSPAWN_AGENT": agent_id,
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
     }
+    # Inherit venv so pip-installed nemospawn is on PATH
+    if os.environ.get("VIRTUAL_ENV"):
+        env["VIRTUAL_ENV"] = os.environ["VIRTUAL_ENV"]
     if gpu_ids:
         env["CUDA_VISIBLE_DEVICES"] = ",".join(str(g) for g in gpu_ids)
 
