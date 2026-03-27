@@ -1,362 +1,346 @@
+<h1 align="center">
+  NemoSpawn
+</h1>
+
 <p align="center">
-  <h1 align="center">NemoSpawn</h1>
-  <p align="center">GPU-native agent-swarm orchestration for the full NVIDIA AI stack</p>
+  <strong>Orchestrate GPU-pinned AI agent swarms across NVIDIA DGX/HGX infrastructure</strong>
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> &bull;
-  <a href="GUIDE.md">User Guide</a> &bull;
-  <a href="#cli-reference">CLI Reference</a> &bull;
-  <a href="#nvidia-stack">NVIDIA Stack</a> &bull;
-  <a href="#contributing">Contributing</a>
+  <a href="#30-second-demo">30s Demo</a> &bull;
+  <a href="#what-it-does">What It Does</a> &bull;
+  <a href="#install">Install</a> &bull;
+  <a href="GUIDE.md">Full Guide</a> &bull;
+  <a href="#nvidia-integrations">NVIDIA Integrations</a>
 </p>
 
 <p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/python-%3E%3D3.10-blue">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-green">
   <img alt="Tests" src="https://img.shields.io/badge/tests-189%20passing-brightgreen">
-  <img alt="CLI" src="https://img.shields.io/badge/CLI%20groups-23-purple">
+  <img alt="CLI Commands" src="https://img.shields.io/badge/CLI%20commands-23%20groups-8b5cf6">
+  <img alt="NVIDIA Stack" src="https://img.shields.io/badge/NVIDIA%20stack-8%20integrations-76b900?logo=nvidia&logoColor=white">
 </p>
 
 ---
 
-One researcher types one goal. NemoSpawn spawns a team of GPU-pinned agents across DGX/HGX nodes, assigns workloads, tracks dependencies, and delivers trained or deployed models — zero manual coordination.
+You describe a research goal. NemoSpawn creates a team of AI agents, pins each to specific GPUs, wires up task dependencies, and lets the agents coordinate autonomously through messaging, plan approvals, and lifecycle management. You watch from a live dashboard. The result is a trained model, a deployed endpoint, or a completed experiment — built by agents working in parallel across your GPU cluster.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  nemospawn launch run autoresearch --gpus 0,1,2,3,4,5,6,7│
-└──────────────┬───────────────────────────────────────────┘
-               │
-    ┌──────────▼──────────┐
-    │    Team Orchestrator  │
-    │  NVLink topology ─── GPU discovery ─── Task DAG      │
-    └──┬───┬───┬───┬───┬──┘
-       │   │   │   │   │
-    ┌──▼┐┌─▼┐┌─▼┐┌─▼┐┌─▼┐
-    │ T0 ││ T1││ T2││ E0││ D0│   Agents (tmux / OpenShell)
-    │GPU0││GPU1││GPU2││GPU3││GPU4│
-    └────┘└───┘└───┘└───┘└───┘
-       │         │         │
-    ┌──▼─────────▼─────────▼──┐
-    │  Messaging (NIXL / ZMQ / File)  │
-    │  Prometheus  │  Grafana  │  Web UI │
-    └─────────────────────────────────┘
-```
+No database. No cloud service. Just a CLI and your GPUs.
 
-## Why NemoSpawn?
-
-- **GPU-first** — NVLink topology discovery, island-aware scheduling, DCGM health monitoring
-- **NVIDIA-native** — first-class integration with [NeMo](https://github.com/NVIDIA/NeMo), [NIM](https://docs.nvidia.com/nim/), [Triton](https://github.com/triton-inference-server/server), [NIXL](https://github.com/NVIDIA/nixl), [DCGM](https://github.com/NVIDIA/DCGM), [NGC](https://catalog.ngc.nvidia.com/), and [OpenShell](https://github.com/NVIDIA/openshell)
-- **Any agent CLI** — works with Claude Code, Codex, Kimi, Cursor, nanobot, aider, or any custom tool
-- **Zero infrastructure** — no database, no server. All state is atomic JSON in `~/.nemospawn/`
-- **Production-ready** — API key auth, audit logging, SLURM integration, cross-cluster federation
-
-## Quick Start
-
-### Install
+## 30-Second Demo
 
 ```bash
 pip install nemospawn
 
-# Optional extras
-pip install nemospawn[hpo]          # Optuna for hyperparameter optimization
-pip install nemospawn[transport]    # ZeroMQ for cross-node messaging
-pip install nemospawn[all]          # Everything
-```
-
-### Prerequisites
-
-- Python >= 3.10
-- [tmux](https://github.com/tmux/tmux) (for agent isolation)
-- NVIDIA GPU drivers (GPU features require nvidia-smi; CPU-only dev mode works without)
-
-### Launch a team in one command
-
-```bash
+# One command: full autonomous research pipeline across 4 GPUs
 nemospawn launch run autoresearch --gpus 0,1,2,3
 ```
 
-### Or build step by step
+That single command:
+1. Discovers your GPU topology and NVLink islands
+2. Creates a team with 2 trainers + 1 evaluator
+3. Pins each agent to a GPU with `CUDA_VISIBLE_DEVICES`
+4. Spawns agents in isolated tmux sessions
+5. Sets up task dependencies (evaluate waits for training to finish)
+6. Injects the coordination protocol so agents know how to report progress
+
+```
+                nemospawn launch run autoresearch --gpus 0,1,2,3
+                                    |
+                    ┌───────────────┼───────────────┐
+                    v               v               v
+              ┌──────────┐   ┌──────────┐   ┌──────────────┐
+              │ trainer-0 │   │ trainer-1 │   │  evaluator   │
+              │   GPU 0   │   │   GPU 1   │   │   GPU 2      │
+              │  lr sweep │   │  lr sweep │   │  perf_analyzer│
+              └─────┬─────┘   └─────┬─────┘   └──────┬───────┘
+                    │               │       blocked_by │
+                    └───────┬───────┘           ┌──────┘
+                            v                   v
+                    ┌──────────────────────────────┐
+                    │  Task DAG auto-unblocks       │
+                    │  Inbox messaging between agents│
+                    │  Plan approval before actions  │
+                    │  Web UI + Prometheus + Grafana  │
+                    └──────────────────────────────┘
+```
+
+## What It Does
+
+### The Problem
+
+You have 8 H100s. You want to run a hyperparameter sweep, evaluate the best checkpoint, deploy it as a NIM endpoint, and benchmark latency — all in parallel where possible. Today you do this with bash scripts, tmux, and prayer.
+
+### The Solution
+
+NemoSpawn treats your GPU cluster as a programmable agent fabric:
 
 ```bash
-# 1. Discover your hardware
-nemospawn gpu discover
-nemospawn gpu topology
+# Step 1: See what you have
+nemospawn gpu discover                    # List GPUs
+nemospawn gpu topology                    # NVLink interconnect map
 
-# 2. Create a team
-nemospawn team create my-experiment --gpus 0,1,2,3 -d "LLM fine-tuning"
+# Step 2: Create a team
+nemospawn team create llama-sweep --gpus 0,1,2,3,4,5,6,7
 
-# 3. Spawn agents
-nemospawn spawn agent --team my-experiment-abc \
-  --agent-name trainer0 --role trainer --gpu 0 \
-  --task "Fine-tune with lr=2e-4" --agent-cmd claude
+# Step 3: Spawn agents (each gets its own GPU, tmux session, and worktree)
+nemospawn spawn agent --team llama-sweep-abc --agent-name trainer0 \
+  --role trainer --gpu 0,1 --task "LoRA sweep on LLaMA-70B" --agent-cmd claude
 
-nemospawn spawn agent --team my-experiment-abc \
-  --agent-name evaluator --role evaluator --gpu 1 \
-  --task "Benchmark via Triton"
+nemospawn spawn agent --team llama-sweep-abc --agent-name deployer \
+  --role deployer --gpu 4 --task "Deploy best checkpoint as NIM TP4"
 
-# 4. Create tasks with dependencies
-nemospawn task create my-experiment-abc "Train model" --owner trainer0
-nemospawn task create my-experiment-abc "Evaluate" --owner evaluator --blocked-by task-abc
+# Step 4: Wire up tasks with dependencies
+nemospawn task create llama-sweep-abc "Train LoRA" --owner trainer0
+nemospawn task create llama-sweep-abc "Deploy NIM" --owner deployer --blocked-by task-train
 
-# 5. Monitor
-nemospawn board serve my-experiment-abc     # Web UI at http://localhost:8080
-nemospawn board live my-experiment-abc      # Terminal kanban
-nemospawn board attach my-experiment-abc    # Tiled tmux
+# Step 5: Watch everything happen
+nemospawn board serve llama-sweep-abc     # Web dashboard at :8080
 ```
 
-> **Full walkthrough**: See [GUIDE.md](GUIDE.md) for detailed docs on every feature.
+Each spawned agent receives an auto-injected coordination prompt that teaches it the full NemoSpawn protocol: how to check tasks, send messages, submit plans, report progress, and signal when it's done.
 
-## Features
+### What Agents Can Do
 
-### Core Orchestration
+Once spawned, agents coordinate autonomously through the CLI:
 
-| Feature | Description |
-|---------|------------|
-| **Team management** | Create GPU-aware teams with [NVLink](https://www.nvidia.com/en-us/data-center/nvlink/) topology discovery and island detection |
-| **Agent spawning** | tmux sessions or [OpenShell](https://github.com/NVIDIA/openshell) sandboxes with `CUDA_VISIBLE_DEVICES` pinning |
-| **Multi-agent CLI** | 8 built-in profiles (Claude Code, Codex, Kimi, Cursor, nanobot, aider, OpenCode, Copilot) + custom |
-| **Task DAG** | Dependencies via `blocked_by` with auto-unblocking, status tracking, wait/timeout |
-| **Messaging** | Point-to-point and broadcast via file, [ZeroMQ](https://zeromq.org/), or [NIXL](https://github.com/NVIDIA/nixl) transport |
-| **Plan approval** | Agents submit plans for leader review before execution |
-| **Prompt injection** | Coordination protocol auto-injected into both tmux and sandbox agents |
-
-### Agent Lifecycle & Scheduling
-
-| Feature | Description |
-|---------|------------|
-| **Lifecycle protocol** | Graceful idle/shutdown request/approve/reject flow |
-| **Adaptive scheduling** | GPU utilization monitoring + automatic task reassignment |
-| **Agent watcher** | Continuous health checks, dead tmux detection, stuck agent alerts |
-| **Cost tracking** | Per-agent GPU-hour accumulation with configurable rates |
-| **Team snapshots** | Save and restore full team state at any point |
-
-### NVIDIA Stack Integration
-
-<a name="nvidia-stack"></a>
-
-| Component | Integration | Resources |
-|-----------|------------|-----------|
-| **[NeMo Framework](https://github.com/NVIDIA/NeMo)** | .nemo artifact store, YAML config injection, NVLink-aware multi-GPU scheduling | [Docs](https://docs.nvidia.com/nemo-framework/) &bull; [GitHub](https://github.com/NVIDIA/NeMo) |
-| **[NIM](https://docs.nvidia.com/nim/)** | Deploy checkpoints as NIM microservices, benchmark with perf_analyzer, rank endpoints by latency/throughput | [Docs](https://docs.nvidia.com/nim/) &bull; [Blog](https://developer.nvidia.com/nim) |
-| **[Triton Inference Server](https://github.com/triton-inference-server/server)** | Model repository generation, perf_analyzer benchmarks (p50/p95/p99 latency) | [Docs](https://docs.nvidia.com/deeplearning/triton-inference-server/) &bull; [GitHub](https://github.com/triton-inference-server/server) |
-| **[DCGM](https://github.com/NVIDIA/DCGM)** | GPU health polling (SM util, memory, temp, power, ECC errors), Prometheus export | [Docs](https://docs.nvidia.com/datacenter/dcgm/) &bull; [GitHub](https://github.com/NVIDIA/DCGM) |
-| **[NGC Catalog](https://catalog.ngc.nvidia.com/)** | Model pull/push, container registry push to nvcr.io, org sharing | [Catalog](https://catalog.ngc.nvidia.com/) &bull; [NGC CLI](https://ngc.nvidia.com/setup/installers/cli) |
-| **[NIXL](https://github.com/NVIDIA/nixl)** | Sub-microsecond messaging over NVLink/InfiniBand with automatic file fallback | [GitHub](https://github.com/NVIDIA/nixl) |
-| **[OpenShell](https://github.com/NVIDIA/openshell)** | Kernel-level sandbox isolation (Landlock, seccomp, network namespace) with GPU passthrough | [GitHub](https://github.com/NVIDIA/openshell) |
-| **[NVLink](https://www.nvidia.com/en-us/data-center/nvlink/)** | Topology parsing, island detection, NVLink-aware task placement for multi-GPU jobs | [Product](https://www.nvidia.com/en-us/data-center/nvlink/) |
-
-### Observability
-
-| Feature | Description |
-|---------|------------|
-| **Web UI** | Browser-based kanban with SSE real-time updates, dark theme (`board serve`) |
-| **[Prometheus](https://prometheus.io/)** | Scrape endpoint at `/metrics` with GPU and task metrics |
-| **[Grafana](https://grafana.com/)** | Auto-provisioned 6-panel dashboard (GPU util, temp, val_loss, tasks) |
-| **Terminal kanban** | Rich-based live task view (`board live`) |
-| **tmux board** | Tiled pane view of all running agents (`board attach`) |
-
-### Configuration & Profiles
-
-| Feature | Description |
-|---------|------------|
-| **Dynamic config** | `config show/get/set/health` — priority: env var > file > default |
-| **Agent profiles** | `profile list/create/test/wizard/doctor` for any CLI agent |
-| **Reusable skill** | `skill install` packages the protocol for Claude Code / Codex agents |
-
-### Templates
-
-Four built-in team templates for one-command launch:
-
-| Template | Description |
-|----------|------------|
-| `autoresearch` | Multi-phase training: DataPrep → Training → Evaluation → HPO loop |
-| `nim-deploy` | Checkpoint → NIM container → Benchmark → Rank → Serve |
-| `rlhf-swarm` | Data → SFT → Reward modeling → PPO optimization |
-| `data-curation` | Ingestion → Cleaning → Deduplication → Validation |
-
-Custom templates use TOML format. See [GUIDE.md#templates--launch](GUIDE.md#templates--launch).
-
-### HPO (Hyperparameter Optimization)
-
-- [Optuna](https://github.com/optuna/optuna) TPE sampler + ASHA pruner (SQLite backend, no server)
-- TOML search space declarations
-- `hpo suggest/report/best/trials/dashboard`
-- Fallback random sampler when Optuna is not installed
-
-### Cross-Cluster Federation
-
-- Register remote DGX/HGX clusters via SSH
-- Spawn agents on remote nodes
-- [git-annex](https://git-annex.branchable.com/) artifact transfer between clusters
-- NFS/SSHFS shared state coordination
-
-### Production Hardening
-
-- API key authentication (SHA-256 hashing)
-- Structured JSONL audit logging
-- Multi-user namespace isolation with role-based access
-- [SLURM](https://slurm.schedmd.com/) job script generation and submission
-
-## CLI Reference
-
-<a name="cli-reference"></a>
-
-NemoSpawn ships 23 command groups:
-
-```
-Core
-  nemospawn team         Create and manage GPU-aware teams
-  nemospawn spawn        Spawn and kill GPU-pinned agents
-  nemospawn task         Task DAG with dependency resolution
-  nemospawn inbox        Inter-agent messaging (send/broadcast/receive)
-  nemospawn plan         Plan approval workflow (submit/approve/reject)
-  nemospawn lifecycle    Agent lifecycle (idle/shutdown request/approve/reject)
-
-GPU & NVIDIA
-  nemospawn gpu          GPU discovery, NVLink topology, DCGM health
-  nemospawn artifact     NeMo artifact store (register/promote/list)
-  nemospawn nim          NIM deployment pipeline (deploy/benchmark/rank)
-  nemospawn ngc          NGC registry (pull/push models and containers)
-  nemospawn hpo          Hyperparameter optimization (Optuna TPE/ASHA)
-
-Infrastructure
-  nemospawn launch       Launch teams from TOML templates
-  nemospawn cluster      Cross-cluster federation (SSH remote spawn)
-  nemospawn slurm        SLURM job management (generate/submit/status)
-  nemospawn auth         Authentication and audit logging
-
-Monitoring
-  nemospawn board        Dashboards (web UI / terminal kanban / tmux tiled)
-  nemospawn watch        Agent health monitoring (tmux alive, stuck detection)
-  nemospawn cost         GPU-hour cost tracking per agent
-  nemospawn schedule     Adaptive scheduling (analyze/suggest/auto-reassign)
-  nemospawn snapshot     Save and restore team state
-
-Configuration
-  nemospawn config       Dynamic config (env > file > default)
-  nemospawn profile      Agent CLI profiles (wizard/doctor/test)
-  nemospawn skill        Install coordination skill for Claude Code / Codex
+```bash
+# Inside the agent's tmux session, the agent runs these:
+nemospawn task update $NEMOSPAWN_TEAM task-abc --status running
+nemospawn inbox send $NEMOSPAWN_TEAM deployer "Best ckpt: epoch-42, val_loss=0.031"
+nemospawn plan submit --team $NEMOSPAWN_TEAM --agent $NEMOSPAWN_AGENT \
+  --title "Switch to cosine LR" --steps "Update config,Retrain,Eval"
+nemospawn artifact register $NEMOSPAWN_TEAM ./model.nemo --type nemo-checkpoint --val-loss 0.031
+nemospawn lifecycle idle --team $NEMOSPAWN_TEAM --agent $NEMOSPAWN_AGENT --reason "All tasks done"
 ```
 
-Run `nemospawn <command> --help` for subcommand details.
+## Install
+
+```bash
+pip install nemospawn                     # Core
+pip install nemospawn[hpo]                # + Optuna HPO
+pip install nemospawn[transport]          # + ZeroMQ cross-node messaging
+pip install nemospawn[all]                # Everything
+```
+
+**Requires:** Python >= 3.10, [tmux](https://github.com/tmux/tmux)
+
+**For GPU features:** NVIDIA drivers + nvidia-smi (CPU-only dev mode works without)
+
+## Feature Overview
+
+### 23 CLI Command Groups
+
+<details>
+<summary><strong>Core Orchestration</strong> (click to expand)</summary>
+
+| Command | What it does |
+|---------|-------------|
+| `nemospawn team` | Create GPU-aware teams with NVLink topology discovery |
+| `nemospawn spawn` | Spawn agents in tmux or [OpenShell](https://github.com/NVIDIA/openshell) sandboxes with GPU pinning |
+| `nemospawn task` | Task DAG — `blocked_by` dependencies, auto-unblocking, val_loss tracking |
+| `nemospawn inbox` | Agent-to-agent messaging — direct, broadcast, atomic JSON delivery |
+| `nemospawn plan` | Plan approval — agents submit proposals for leader review before execution |
+| `nemospawn lifecycle` | Graceful idle/shutdown request/approve/reject protocol |
+</details>
+
+<details>
+<summary><strong>NVIDIA GPU & AI Stack</strong></summary>
+
+| Command | What it does |
+|---------|-------------|
+| `nemospawn gpu` | GPU discovery, [NVLink](https://www.nvidia.com/en-us/data-center/nvlink/) topology, [DCGM](https://github.com/NVIDIA/DCGM) health monitoring |
+| `nemospawn artifact` | [NeMo](https://github.com/NVIDIA/NeMo) artifact store — register, promote, val_loss ranking |
+| `nemospawn nim` | [NIM](https://docs.nvidia.com/nim/) deployment — build containers, benchmark with [perf_analyzer](https://github.com/triton-inference-server/perf_analyzer), rank endpoints |
+| `nemospawn ngc` | [NGC](https://catalog.ngc.nvidia.com/) registry — pull/push models and containers |
+| `nemospawn hpo` | [Optuna](https://github.com/optuna/optuna) TPE + ASHA pruner for hyperparameter optimization |
+</details>
+
+<details>
+<summary><strong>Infrastructure & Operations</strong></summary>
+
+| Command | What it does |
+|---------|-------------|
+| `nemospawn launch` | One-command team launch from TOML templates (autoresearch, nim-deploy, rlhf-swarm, data-curation) |
+| `nemospawn cluster` | Cross-cluster federation — SSH remote spawn on DGX/HGX nodes |
+| `nemospawn slurm` | [SLURM](https://slurm.schedmd.com/) job script generation, submission, status, cancel |
+| `nemospawn auth` | API key auth (SHA-256), multi-user namespaces, JSONL audit logging |
+</details>
+
+<details>
+<summary><strong>Monitoring & Observability</strong></summary>
+
+| Command | What it does |
+|---------|-------------|
+| `nemospawn board` | Web UI kanban (SSE real-time), terminal kanban (Rich), tiled tmux view |
+| `nemospawn watch` | Agent health monitoring — dead tmux detection, stuck agent alerts |
+| `nemospawn cost` | GPU-hour cost tracking per agent with configurable $/GPU-hour rates |
+| `nemospawn schedule` | Adaptive scheduling — analyze GPU util, auto-reassign tasks from underperformers |
+| `nemospawn snapshot` | Save and restore full team state |
+</details>
+
+<details>
+<summary><strong>Configuration</strong></summary>
+
+| Command | What it does |
+|---------|-------------|
+| `nemospawn config` | Dynamic config — env var > config file > default (10 settings) |
+| `nemospawn profile` | Agent CLI profiles — wizard, doctor, smoke test for 8 supported agents |
+| `nemospawn skill` | Install coordination protocol as a discoverable skill for Claude Code / Codex |
+</details>
+
+### 8 Supported Agent CLIs
+
+| Agent | Auth | Prompt Injection |
+|-------|------|-----------------|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `ANTHROPIC_API_KEY` | CLI flag |
+| [Codex](https://github.com/openai/codex) | `OPENAI_API_KEY` | CLI flag |
+| [Kimi CLI](https://github.com/anthropics/kimi-cli) | `MOONSHOT_API_KEY` | CLI flag |
+| [aider](https://github.com/paul-gauthier/aider) | `OPENAI_API_KEY` | CLI flag |
+| [nanobot](https://github.com/nano-bot/nanobot) | — | CLI flag |
+| Cursor | — | File |
+| OpenCode | — | File |
+| GitHub Copilot | `GITHUB_TOKEN` | File |
+
+Plus `--agent-cmd custom` for any unlisted CLI tool. Create profiles with `nemospawn profile wizard`.
+
+### 4 Built-in Templates
+
+```bash
+nemospawn launch run autoresearch --gpus 0-7    # HP sweep → train → eval loop
+nemospawn launch run nim-deploy --gpus 0-3      # Checkpoint → NIM → benchmark → rank
+nemospawn launch run rlhf-swarm --gpus 0-3      # SFT → reward model → PPO
+nemospawn launch run data-curation --gpus 0,1   # Ingest → clean → deduplicate → validate
+```
+
+Write your own in TOML:
+
+```toml
+name = "my-pipeline"
+min_gpus = 2
+
+[[workers]]
+name = "trainer"
+role = "trainer"
+gpu_count = 2
+task = "Fine-tune LLaMA-70B with LoRA"
+require_nvlink = true
+
+[[workers]]
+name = "evaluator"
+role = "evaluator"
+gpu_count = 1
+task = "Run AlpacaEval"
+blocked_by = ["trainer"]
+```
+
+<a name="nvidia-integrations"></a>
+## NVIDIA Integrations
+
+NemoSpawn directly calls 8 NVIDIA components and runs on 7 more:
+
+### Direct (NemoSpawn calls these APIs/CLIs)
+
+| Component | What NemoSpawn does with it |
+|-----------|---------------------------|
+| **[nvidia-smi / NVML](https://developer.nvidia.com/nvidia-management-library-nvml)** | `gpu discover` lists GPUs. `gpu topology` parses the NVLink interconnect matrix. `gpu health` reads temperature, utilization, power, and ECC errors via [pynvml](https://pypi.org/project/pynvml/) bindings. |
+| **[NeMo Framework](https://github.com/NVIDIA/NeMo)** | Manages `.nemo` checkpoint bundles. Generates YAML config overrides with schema-aware type coercion. NVLink-aware scheduler places multi-GPU training on the same NVLink island for maximum interconnect bandwidth. |
+| **[NIM](https://docs.nvidia.com/nim/)** | `nim deploy` builds inference containers from checkpoints with tensor parallel profiles (TP1-TP8). `nim benchmark` runs [perf_analyzer](https://github.com/triton-inference-server/perf_analyzer) and reports p50/p95/p99 latency. `nim list` tracks endpoint health. |
+| **[Triton Inference Server](https://github.com/triton-inference-server/server)** | Auto-generates `config.pbtxt` model repository configs. Benchmarks endpoints via perf_analyzer with configurable concurrency levels. |
+| **[DCGM](https://github.com/NVIDIA/DCGM)** | `gpu status` polls `dcgmi dmon` for SM utilization, memory, temperature, power, ECC errors. Exports to [Prometheus](https://prometheus.io/). Falls back to nvidia-smi gracefully. |
+| **[NGC](https://catalog.ngc.nvidia.com/)** | `ngc pull/push` wraps the NGC CLI for model download/upload. `ngc push-container` pushes to `nvcr.io`. |
+| **[NIXL](https://github.com/NVIDIA/nixl)** | Sub-microsecond inter-agent messaging over NVLink/InfiniBand. Auto-negotiated — falls back to ZeroMQ then file transport. |
+| **[OpenShell](https://github.com/NVIDIA/openshell)** | `--runtime sandbox` spawns agents with kernel-level isolation (Landlock filesystem + seccomp syscalls + network namespaces). GPU passthrough via CUDA. Per-role security policies auto-generated. |
+
+### Indirect (infrastructure NemoSpawn runs on)
+
+| Component | How it's used |
+|-----------|--------------|
+| **[NVLink](https://www.nvidia.com/en-us/data-center/nvlink/)** | Topology parsed to detect GPU islands. Multi-GPU tasks placed on same island. Link types tracked: NV12, NV8, NV4, NV2. |
+| **[CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)** | Agents use `CUDA_VISIBLE_DEVICES` for GPU pinning. NeMo/NIM workloads run on CUDA. |
+| **[NCCL](https://github.com/NVIDIA/nccl)** | Multi-GPU training uses NCCL for collective comms. NemoSpawn configures TP/PP degrees that NCCL implements. |
+| **[cuDNN](https://developer.nvidia.com/cudnn)** | NeMo training uses cuDNN. NemoSpawn configures mixed-precision modes (bf16-mixed, 16-mixed, 32). |
+| **[TensorRT](https://github.com/NVIDIA/TensorRT)** | NIM containers use TensorRT for inference. `--profile max-throughput` leverages TensorRT compilation. |
+| **[Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit)** | Required for GPU access inside NIM Docker containers. |
+| **[DGX / HGX](https://www.nvidia.com/en-us/data-center/dgx-platform/)** | Cross-cluster federation targets DGX/HGX nodes. Topology features optimized for DGX H100/A100. |
 
 ## Architecture
 
 ```
-~/.nemospawn/                          # All state — no database
+~/.nemospawn/                             All state — atomic JSON, no database
 ├── teams/{id}/
-│   ├── team.json                      # GPU list, NVLink topology
-│   ├── agents/{id}.json               # Status, GPUs, tmux session, lifecycle
-│   ├── tasks/{id}.json                # DAG with blocked_by deps
-│   ├── plans/{id}.json                # Approval workflow state
-│   ├── inbox/{agent}/                 # Per-agent message files
-│   ├── artifacts/{id}.json            # .nemo checkpoints, NIM containers
-│   ├── prompts/{id}.md                # Auto-injected coordination prompts
-│   ├── snapshots/{id}.json            # Team state snapshots
-│   ├── costs/cost_record.json         # GPU-hour tracking
-│   ├── workspaces/                    # Git worktrees per agent
-│   └── metrics/                       # DCGM metric snapshots
-├── clusters/                          # Federated cluster SSH configs
-├── profiles/                          # Custom agent profiles
-├── hpo/                               # Optuna study databases
-├── config.json                        # Dynamic configuration
-└── audit.jsonl                        # Structured audit log
+│   ├── team.json                         GPU list, NVLink topology, islands
+│   ├── agents/{id}.json                  Status, GPUs, tmux session, lifecycle
+│   ├── tasks/{id}.json                   DAG: blocked_by deps, val_loss, metadata
+│   ├── plans/{id}.json                   Submit → pending → approved/rejected
+│   ├── inbox/{agent}/                    Per-agent message files
+│   ├── artifacts/{id}.json               .nemo checkpoints, NIM containers
+│   ├── prompts/{id}.md                   Auto-injected coordination prompts
+│   ├── snapshots/{id}.json               Point-in-time team state
+│   ├── costs/cost_record.json            GPU-hour tracking
+│   ├── workspaces/                       Git worktrees (one per agent)
+│   └── metrics/                          DCGM snapshots
+├── config.json                           Dynamic config (env > file > default)
+└── audit.jsonl                           Structured audit log
 ```
 
-Every write uses atomic `tmpfile + os.replace` — crash-safe on POSIX.
+**Transport negotiation** — messaging picks the fastest available backend automatically:
 
-### Transport Negotiation
+| Condition | Transport | Latency |
+|-----------|-----------|---------|
+| Same node + NVLink | [NIXL](https://github.com/NVIDIA/nixl) | Sub-microsecond |
+| Cross-node | [ZeroMQ](https://zeromq.org/) | TCP |
+| Fallback | File (atomic JSON) | Filesystem I/O |
 
-NemoSpawn automatically selects the best messaging transport:
-
-1. **NIXL** — same node with NVLink (sub-microsecond latency)
-2. **ZeroMQ** — cross-node TCP
-3. **File** — always-available fallback (atomic JSON)
-
-### How Agents Coordinate
-
-1. Agent spawns with `NEMOSPAWN_TEAM`, `NEMOSPAWN_AGENT`, and `CUDA_VISIBLE_DEVICES` env vars
-2. A coordination prompt is auto-injected (`prompts/{agent_id}.md`)
-3. The prompt teaches the agent all NemoSpawn CLI commands
-4. Agents check tasks, update status, send messages, submit plans — all via CLI
-5. The leader monitors progress via `board serve` or `board live`
-6. When done, agents report `idle` via `lifecycle idle`
+**Coordination flow:**
+1. Agent spawns with `NEMOSPAWN_TEAM`, `NEMOSPAWN_AGENT`, `CUDA_VISIBLE_DEVICES`
+2. Coordination prompt auto-injected at `prompts/{agent_id}.md`
+3. Agent checks tasks → works → updates status → messages peers → submits plans
+4. Leader watches via `board serve` (web) or `board live` (terminal)
+5. Agent reports `lifecycle idle` when done
 
 ## Development
 
 ```bash
-# Clone and install
 git clone https://github.com/alokemajumder/nemospawn.git
 cd nemospawn
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-
-# Run tests
-pytest tests/ -v
-
-# Lint
-ruff check src/ tests/
+pytest tests/ -v           # 189 tests
+ruff check src/ tests/     # Lint
 ```
 
-### Project Layout
+<details>
+<summary>Project layout</summary>
 
 ```
 src/nemospawn/
-├── cli/            23 Typer command groups
-├── core/           State, models, auth, profiles, config, plan, lifecycle,
-│                   costs, snapshot, watcher, adaptive scheduling, skill
-├── gpu/            Discovery, NVLink topology, DCGM health
-├── nemo/           Artifacts, config injection, NVLink-aware scheduling
-├── nim/            NIM deployer, Triton benchmarks
-├── openshell/      Sandbox integration, security policies, prompt injection
-├── messaging/      File / ZeroMQ / NIXL transport
-├── observability/  Prometheus, Grafana, kanban, web UI (SSE)
-├── templates/      TOML templates, launch engine
-├── federation/     Cross-cluster SSH spawn, git-annex
-├── hpo/            Optuna TPE/ASHA, fallback sampler
-├── ngc/            NGC model registry
-└── runtime/        tmux, git worktree, SLURM
+├── cli/             23 Typer command groups
+├── core/            State, models, auth, profiles, config, plan,
+│                    lifecycle, costs, snapshot, watcher, adaptive, skill
+├── gpu/             Discovery, NVLink topology, DCGM health
+├── nemo/            Artifacts, config injection, NVLink-aware scheduling
+├── nim/             NIM deployer, Triton benchmarks
+├── openshell/       Sandbox integration, security policies, prompts
+├── messaging/       File / ZeroMQ / NIXL transport
+├── observability/   Prometheus, Grafana, kanban, web UI (SSE)
+├── templates/       TOML templates, launch engine
+├── federation/      Cross-cluster SSH spawn, git-annex
+├── hpo/             Optuna TPE/ASHA, fallback sampler
+├── ngc/             NGC model registry
+└── runtime/         tmux, git worktree, SLURM
 ```
-
-## NVIDIA Stack Usage
-
-How NemoSpawn uses each NVIDIA component — directly (calls its APIs/CLIs) or indirectly (leverages its infrastructure):
-
-### Direct integrations (NemoSpawn calls these)
-
-| Component | How NemoSpawn uses it | Link |
-|-----------|----------------------|------|
-| **nvidia-smi / NVML** | GPU discovery (`gpu discover`), topology parsing (`gpu topology`), health metrics (`gpu health`). Called via subprocess and [pynvml](https://pypi.org/project/pynvml/) bindings. | [NVML Docs](https://developer.nvidia.com/nvidia-management-library-nvml) |
-| **NeMo Framework** | Artifact store manages `.nemo` checkpoint bundles. Config injection generates NeMo YAML overrides with schema-aware type coercion. NVLink-aware scheduler places multi-GPU NeMo training on the same NVLink island. | [GitHub](https://github.com/NVIDIA/NeMo) &bull; [Docs](https://docs.nvidia.com/nemo-framework/) |
-| **NIM** | `nim deploy` builds NIM containers from `.nemo` checkpoints with tensor parallel profiles (TP1-TP8). `nim benchmark` runs perf_analyzer. `nim list` tracks running endpoints. | [Docs](https://docs.nvidia.com/nim/) &bull; [Developer](https://developer.nvidia.com/nim) |
-| **Triton Inference Server** | `nim benchmark` invokes `perf_analyzer` against NIM/Triton endpoints. Model repository config (`config.pbtxt`) is auto-generated from NIM artifacts. Reports p50/p95/p99 latency and throughput. | [GitHub](https://github.com/triton-inference-server/server) &bull; [perf_analyzer](https://github.com/triton-inference-server/perf_analyzer) |
-| **DCGM** | `gpu status` polls `dcgmi dmon` for real-time GPU metrics (SM util, memory util, temperature, power, ECC errors, PCIe throughput). Metrics are exported to Prometheus. Falls back to nvidia-smi when DCGM is not installed. | [GitHub](https://github.com/NVIDIA/DCGM) &bull; [Docs](https://docs.nvidia.com/datacenter/dcgm/) |
-| **NGC CLI** | `ngc pull/push` wraps the NGC CLI for model download/upload. `ngc push-container` pushes Docker images to `nvcr.io`. `ngc auth` checks CLI authentication. | [Catalog](https://catalog.ngc.nvidia.com/) &bull; [NGC CLI](https://ngc.nvidia.com/setup/installers/cli) |
-| **NIXL** | Messaging transport for agents on the same node with NVLink. Provides sub-microsecond latency for inter-agent coordination. Auto-negotiated — falls back to ZeroMQ or file transport when NIXL is unavailable. | [GitHub](https://github.com/NVIDIA/nixl) |
-| **OpenShell** | `--runtime sandbox` spawns agents inside OpenShell sandboxes with kernel-level isolation (Landlock filesystem, seccomp syscall filtering, network namespaces). GPU passthrough via `CUDA_VISIBLE_DEVICES`. Per-role security policies generated automatically. | [GitHub](https://github.com/NVIDIA/openshell) |
-
-### Indirect integrations (infrastructure NemoSpawn runs on)
-
-| Component | Role in NemoSpawn | Link |
-|-----------|-------------------|------|
-| **NVLink** | `gpu topology` parses the NVLink interconnect matrix to detect GPU islands. Multi-GPU tasks are scheduled on the same island to maximize interconnect bandwidth. Link types tracked: NV12, NV8, NV4, NV2, SYS, PHB, PXB. | [Product](https://www.nvidia.com/en-us/data-center/nvlink/) |
-| **CUDA Toolkit** | Agents use `CUDA_VISIBLE_DEVICES` for GPU pinning. NeMo and NIM workloads run on CUDA. NemoSpawn itself does not call CUDA APIs directly. | [Toolkit](https://developer.nvidia.com/cuda-toolkit) |
-| **NCCL** | Multi-GPU NeMo training uses NCCL for collective communication. NemoSpawn configures tensor parallel (TP) and pipeline parallel (PP) degrees that NCCL implements. | [GitHub](https://github.com/NVIDIA/nccl) |
-| **cuDNN** | NeMo training workloads use cuDNN internally. NemoSpawn does not call cuDNN directly but configures mixed-precision modes (bf16-mixed, 16-mixed, 32) that cuDNN accelerates. | [Developer](https://developer.nvidia.com/cudnn) |
-| **TensorRT** | NIM containers use TensorRT for inference optimization. `nim deploy --profile max-throughput` leverages TensorRT compilation. NemoSpawn manages the deployment lifecycle, not the compilation. | [GitHub](https://github.com/NVIDIA/TensorRT) |
-| **NVIDIA Container Toolkit** | NIM containers require the NVIDIA Container Toolkit for GPU access inside Docker. `nim deploy` assumes this is installed on the host. | [GitHub](https://github.com/NVIDIA/nvidia-container-toolkit) |
-| **DGX / HGX Systems** | NemoSpawn's cross-cluster federation (`cluster register/spawn`) targets DGX and HGX nodes. GPU topology features are optimized for DGX H100/A100 NVLink configurations. | [Platform](https://www.nvidia.com/en-us/data-center/dgx-platform/) |
+</details>
 
 ## Contributing
 
-Contributions welcome. Please:
+Contributions welcome:
 
-1. Fork the repository
+1. Fork the repo
 2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Run tests (`pytest tests/ -v`)
-4. Run lint (`ruff check src/ tests/`)
-5. Submit a PR
+3. Run tests (`pytest tests/ -v`) and lint (`ruff check src/ tests/`)
+4. Submit a PR
 
 See [GUIDE.md](GUIDE.md) for architecture details and development patterns.
 
