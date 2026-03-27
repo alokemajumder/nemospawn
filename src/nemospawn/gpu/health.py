@@ -51,7 +51,10 @@ def get_gpu_health(gpu_index: int) -> dict:
 def check_all_gpus() -> list[dict]:
     """Get health metrics for all GPUs."""
     try:
-        import pynvml
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning, module="pynvml")
+            import pynvml
 
         pynvml.nvmlInit()
         count = pynvml.nvmlDeviceGetCount()

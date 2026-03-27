@@ -29,6 +29,7 @@ Complete reference for every NemoSpawn feature. For a quick overview, see [READM
 - [Cross-Cluster Federation](#cross-cluster-federation)
 - [Authentication & Security](#authentication--security)
 - [SLURM Integration](#slurm-integration)
+- [Workspace Management](#workspace-management)
 - [Agent Skill](#agent-skill)
 - [State Architecture](#state-architecture)
 
@@ -584,6 +585,23 @@ nemospawn slurm cancel 12345
 ```
 
 Generates sbatch scripts with GPU resource requests, partition config, module loading, and environment setup.
+
+---
+
+## Workspace Management
+
+Manage git worktrees for agent code isolation:
+
+```bash
+nemospawn workspace list --team t1                              # List all agent worktrees
+nemospawn workspace checkpoint --team t1 --agent a1             # Auto-commit current work
+nemospawn workspace checkpoint --team t1 --agent a1 -m "epoch 5 done"  # Custom message
+nemospawn workspace merge --team t1 --agent a1                  # Merge agent branch to main
+nemospawn workspace merge --team t1 --agent a1 --target develop # Merge to specific branch
+nemospawn workspace cleanup --team t1 --agent a1                # Remove worktree
+```
+
+The leader agent uses `workspace merge` to combine results from worker agents back to the main branch after verifying quality. Workers use `workspace checkpoint` to save progress at key milestones.
 
 ---
 

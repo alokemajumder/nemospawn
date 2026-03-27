@@ -14,7 +14,7 @@ pytest tests/ -v
 
 ## Architecture
 - `src/nemospawn/core/` — state management (atomic JSON), models, auth, audit, profiles, settings, plan, lifecycle, costs, snapshot, watcher, adaptive scheduling, skill
-- `src/nemospawn/cli/` — Typer CLI commands (23 command groups)
+- `src/nemospawn/cli/` — Typer CLI commands (24 command groups)
 - `src/nemospawn/gpu/` — GPU discovery, NVLink topology, DCGM health
 - `src/nemospawn/nemo/` — NeMo artifacts, config injection, NVLink-aware scheduling
 - `src/nemospawn/nim/` — NIM deploy pipeline, Triton benchmarks
@@ -33,7 +33,7 @@ pytest tests/ -v
 - GPU pinning via `CUDA_VISIBLE_DEVICES`
 - Config priority: env var (NEMOSPAWN_*) > config file > defaults
 - Coordination prompt auto-injected for both tmux and sandbox agents
-- Tests: `pytest tests/ -v` — 189 tests across 32 files
+- Tests: `pytest tests/ -v` — 201 tests across 34 files
 
 ## Style
 - Python >=3.10, Typer+Rich CLI, dataclasses (not Pydantic)

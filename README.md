@@ -17,8 +17,8 @@
 <p align="center">
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-green">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-189%20passing-brightgreen">
-  <img alt="CLI Commands" src="https://img.shields.io/badge/CLI%20commands-23%20groups-8b5cf6">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-201%20passing-brightgreen">
+  <img alt="CLI Commands" src="https://img.shields.io/badge/CLI%20commands-24%20groups-8b5cf6">
   <img alt="NVIDIA Stack" src="https://img.shields.io/badge/NVIDIA%20stack-8%20integrations-76b900?logo=nvidia&logoColor=white">
 </p>
 
@@ -130,7 +130,7 @@ pip install nemospawn[all]                # Everything
 
 ## Feature Overview
 
-### 23 CLI Command Groups
+### 24 CLI Command Groups
 
 <details>
 <summary><strong>Core Orchestration</strong> (click to expand)</summary>
@@ -178,6 +178,7 @@ pip install nemospawn[all]                # Everything
 | `nemospawn cost` | GPU-hour cost tracking per agent with configurable $/GPU-hour rates |
 | `nemospawn schedule` | Adaptive scheduling — analyze GPU util, auto-reassign tasks from underperformers |
 | `nemospawn snapshot` | Save and restore full team state |
+| `nemospawn workspace` | Git worktree checkpoint, merge, cleanup per agent |
 </details>
 
 <details>
@@ -188,6 +189,7 @@ pip install nemospawn[all]                # Everything
 | `nemospawn config` | Dynamic config — env var > config file > default (10 settings) |
 | `nemospawn profile` | Agent CLI profiles — wizard, doctor, smoke test for 8 supported agents |
 | `nemospawn skill` | Install coordination protocol as a discoverable skill for Claude Code / Codex |
+| `nemospawn workspace` | Git worktree management — checkpoint, merge, cleanup per agent |
 </details>
 
 ### 8 Supported Agent CLIs
