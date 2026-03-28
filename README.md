@@ -24,7 +24,7 @@
 
 ---
 
-You describe a research goal. NemoSpawn creates a team of AI agents, pins each to specific GPUs, wires up task dependencies, and lets the agents coordinate autonomously through messaging, plan approvals, and lifecycle management. You watch from a live dashboard. The result is a trained model, a deployed endpoint, or a completed experiment — built by agents working in parallel across your GPU cluster.
+You describe a research goal. NemoSpawn spawns an intelligent leader agent that autonomously orchestrates specialized sub-agents across your GPUs — designing experiments, monitoring performance, reallocating resources, and synthesizing results. No human intervention after launch.
 
 No database. No cloud service. Just a CLI and your GPUs.
 
@@ -33,37 +33,46 @@ No database. No cloud service. Just a CLI and your GPUs.
 ```bash
 pip install nemospawn
 
-# One command: full autonomous research pipeline across 4 GPUs
-nemospawn launch run autoresearch --gpus 0,1,2,3
+# One command: autonomous research across 8 GPUs
+nemospawn launch run autoresearch --gpus 0,1,2,3,4,5,6,7
 ```
 
 That single command:
 1. Discovers your GPU topology and NVLink islands
-2. Creates a team with 2 trainers + 1 evaluator
-3. Pins each agent to a GPU with `CUDA_VISIBLE_DEVICES`
-4. Spawns agents in isolated tmux sessions
-5. Sets up task dependencies (evaluate waits for training to finish)
-6. Injects the coordination protocol so agents know how to report progress
+2. Spawns an **AI leader agent** that orchestrates the entire team
+3. Leader spawns **trainers** on available GPUs and an **evaluator**
+4. Wires up task dependencies (evaluate waits for training)
+5. Leader monitors GPU performance, kills underperformers, respawns with new hyperparameters
+6. All agents get the full coordination protocol injected automatically
 
 ```
-                nemospawn launch run autoresearch --gpus 0,1,2,3
+            nemospawn launch run autoresearch --gpus 0,1,2,3,4,5,6,7
                                     |
-                    ┌───────────────┼───────────────┐
-                    v               v               v
-              ┌──────────┐   ┌──────────┐   ┌──────────────┐
-              │ trainer-0 │   │ trainer-1 │   │  evaluator   │
-              │   GPU 0   │   │   GPU 1   │   │   GPU 2      │
-              │  lr sweep │   │  lr sweep │   │  perf_analyzer│
-              └─────┬─────┘   └─────┬─────┘   └──────┬───────┘
-                    │               │       blocked_by │
-                    └───────┬───────┘           ┌──────┘
-                            v                   v
-                    ┌──────────────────────────────┐
-                    │  Task DAG auto-unblocks       │
-                    │  Inbox messaging between agents│
-                    │  Plan approval before actions  │
-                    │  Web UI + Prometheus + Grafana  │
-                    └──────────────────────────────┘
+                          ┌─────────▼─────────┐
+                          │   orchestrator     │
+                          │   (AI leader)      │
+                          │   spawns, monitors,│
+                          │   reallocates      │
+                          └──┬──┬──┬──┬──┬──┬──┘
+                             │  │  │  │  │  │
+               ┌─────────┐ ┌┘  │  │  │  │  └┐ ┌──────────┐
+               │trainer-0 │ │   │  │  │  │   │ │evaluator │
+               │  GPU 0   │ │   │  │  │  │   │ │  GPU 7   │
+               └──────────┘ │   │  │  │  │   │ └──────────┘
+                     ┌──────┘   │  │  │  └───┘
+                     │trainer-1 │  │  │ trainer-5│
+                     │  GPU 1   │  │  │  GPU 5  │
+                     └──────────┘  │  └─────────┘
+                          ...  GPUs 2-4  ...
+
+         ┌─────────────────────────────────────────────┐
+         │  Leader autonomously:                        │
+         │  - Designs experiments with varied HP         │
+         │  - Monitors GPU util via DCGM                │
+         │  - Kills underperformers, respawns fresh     │
+         │  - Reviews worker plans before execution     │
+         │  - Merges results, synthesizes findings      │
+         └─────────────────────────────────────────────┘
 ```
 
 ## What It Does
@@ -74,41 +83,52 @@ You have 8 H100s. You want to run a hyperparameter sweep, evaluate the best chec
 
 ### The Solution
 
-NemoSpawn treats your GPU cluster as a programmable agent fabric:
+NemoSpawn treats your GPU cluster as a programmable agent fabric. An AI leader agent orchestrates everything:
 
 ```bash
 # Step 1: See what you have
 nemospawn gpu discover                    # List GPUs
 nemospawn gpu topology                    # NVLink interconnect map
 
-# Step 2: Create a team
-nemospawn team create llama-sweep --gpus 0,1,2,3,4,5,6,7
+# Step 2: Launch autonomous research (leader + workers)
+nemospawn launch run autoresearch --gpus 0,1,2,3,4,5,6,7
 
-# Step 3: Spawn agents (each gets its own GPU, tmux session, and worktree)
-nemospawn spawn agent --team llama-sweep-abc --agent-name trainer0 \
-  --role trainer --gpu 0,1 --task "LoRA sweep on LLaMA-70B" --agent-cmd claude
-
-nemospawn spawn agent --team llama-sweep-abc --agent-name deployer \
-  --role deployer --gpu 4 --task "Deploy best checkpoint as NIM TP4"
-
-# Step 4: Wire up tasks with dependencies
-nemospawn task create llama-sweep-abc "Train LoRA" --owner trainer0
-nemospawn task create llama-sweep-abc "Deploy NIM" --owner deployer --blocked-by task-train
-
-# Step 5: Watch everything happen
-nemospawn board serve llama-sweep-abc     # Web dashboard at :8080
+# Step 3: Watch from the dashboard
+nemospawn board serve my-team-abc         # Web dashboard at :8080
 ```
 
-Each spawned agent receives an auto-injected coordination prompt that teaches it the full NemoSpawn protocol: how to check tasks, send messages, submit plans, report progress, and signal when it's done.
-
-### What Agents Can Do
-
-Once spawned, agents coordinate autonomously through the CLI:
+Or build manually with full control:
 
 ```bash
-# Inside the agent's tmux session, the agent runs these:
+# Create team and spawn a leader agent
+nemospawn team create llama-sweep --gpus 0,1,2,3,4,5,6,7
+nemospawn spawn agent --team llama-sweep-abc --agent-name orchestrator \
+  --role leader --task "Design HP sweep, spawn trainers, monitor, reallocate"
+
+# Leader agent then autonomously spawns workers, creates tasks, monitors...
+```
+
+### How Agents Self-Organize
+
+The leader agent receives a 10-step autonomous orchestration protocol:
+
+1. **Discover GPUs** — `nemospawn gpu discover`
+2. **Spawn worker agents** on available GPUs with specialized tasks
+3. **Create task dependencies** — training before evaluation, evaluation before deployment
+4. **Monitor performance** — `nemospawn schedule analyze` checks GPU utilization per agent
+5. **Review worker plans** — approve or reject before major experiments
+6. **Detect underperformers** — `nemospawn schedule suggest` finds low-utilization agents
+7. **Kill idle agents** — `nemospawn spawn kill` frees GPUs
+8. **Respawn with new parameters** — fresh agents with updated hyperparameters
+9. **Merge results** — `nemospawn workspace merge` combines agent branches
+10. **Synthesize findings** — report final results
+
+Workers coordinate autonomously through the CLI:
+
+```bash
+# Workers run these from their tmux sessions:
 nemospawn task update $NEMOSPAWN_TEAM task-abc --status running
-nemospawn inbox send $NEMOSPAWN_TEAM deployer "Best ckpt: epoch-42, val_loss=0.031"
+nemospawn inbox send $NEMOSPAWN_TEAM leader "val_loss=0.031 at epoch 42"
 nemospawn plan submit --team $NEMOSPAWN_TEAM --agent $NEMOSPAWN_AGENT \
   --title "Switch to cosine LR" --steps "Update config,Retrain,Eval"
 nemospawn artifact register $NEMOSPAWN_TEAM ./model.nemo --type nemo-checkpoint --val-loss 0.031
@@ -189,7 +209,6 @@ pip install nemospawn[all]                # Everything
 | `nemospawn config` | Dynamic config — env var > config file > default (10 settings) |
 | `nemospawn profile` | Agent CLI profiles — wizard, doctor, smoke test for 8 supported agents |
 | `nemospawn skill` | Install coordination protocol as a discoverable skill for Claude Code / Codex |
-| `nemospawn workspace` | Git worktree management — checkpoint, merge, cleanup per agent |
 </details>
 
 ### 8 Supported Agent CLIs
@@ -207,20 +226,28 @@ pip install nemospawn[all]                # Everything
 
 Plus `--agent-cmd custom` for any unlisted CLI tool. Create profiles with `nemospawn profile wizard`.
 
-### 4 Built-in Templates
+### 4 Built-in Templates (all include AI leader)
+
+Every template spawns an **orchestrator agent** (`role=leader`) that autonomously manages the team:
 
 ```bash
-nemospawn launch run autoresearch --gpus 0-7    # HP sweep → train → eval loop
-nemospawn launch run nim-deploy --gpus 0-3      # Checkpoint → NIM → benchmark → rank
-nemospawn launch run rlhf-swarm --gpus 0-3      # SFT → reward model → PPO
-nemospawn launch run data-curation --gpus 0,1   # Ingest → clean → deduplicate → validate
+nemospawn launch run autoresearch --gpus 0-7    # Leader + trainers + evaluator
+nemospawn launch run nim-deploy --gpus 0-3      # Leader + deployers + benchmarker
+nemospawn launch run rlhf-swarm --gpus 0-3      # Leader + reward + PPO + eval
+nemospawn launch run data-curation --gpus 0,1   # Leader + curator + trainer
 ```
 
 Write your own in TOML:
 
 ```toml
 name = "my-pipeline"
-min_gpus = 2
+min_gpus = 3
+
+[[workers]]
+name = "orchestrator"
+role = "leader"
+gpu_count = 0
+task = "Orchestrate team: spawn workers, monitor GPU perf, reallocate, synthesize results"
 
 [[workers]]
 name = "trainer"
@@ -295,12 +322,15 @@ NemoSpawn directly calls 8 NVIDIA components and runs on 7 more:
 | Cross-node | [ZeroMQ](https://zeromq.org/) | TCP |
 | Fallback | File (atomic JSON) | Filesystem I/O |
 
-**Coordination flow:**
-1. Agent spawns with `NEMOSPAWN_TEAM`, `NEMOSPAWN_AGENT`, `CUDA_VISIBLE_DEVICES`
-2. Coordination prompt auto-injected at `prompts/{agent_id}.md`
-3. Agent checks tasks → works → updates status → messages peers → submits plans
-4. Leader watches via `board serve` (web) or `board live` (terminal)
-5. Agent reports `lifecycle idle` when done
+**Autonomous coordination flow:**
+1. `nemospawn launch run autoresearch` spawns leader + workers
+2. Each agent gets `NEMOSPAWN_TEAM`, `NEMOSPAWN_AGENT`, `CUDA_VISIBLE_DEVICES`, `PATH`
+3. Coordination prompt auto-injected — leader gets 10-step orchestration protocol
+4. Leader spawns additional agents, creates tasks, monitors GPU performance
+5. Workers train, report val_loss, submit plans, send messages
+6. Leader detects underperformers, kills idle agents, respawns with new params
+7. Workers report `lifecycle idle` when done
+8. Leader merges results and synthesizes findings
 
 ## Development
 
@@ -309,7 +339,7 @@ git clone https://github.com/alokemajumder/nemospawn.git
 cd nemospawn
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest tests/ -v           # 189 tests
+pytest tests/ -v           # 201 tests
 ruff check src/ tests/     # Lint
 ```
 
@@ -318,7 +348,7 @@ ruff check src/ tests/     # Lint
 
 ```
 src/nemospawn/
-├── cli/             23 Typer command groups
+├── cli/             24 Typer command groups
 ├── core/            State, models, auth, profiles, config, plan,
 │                    lifecycle, costs, snapshot, watcher, adaptive, skill
 ├── gpu/             Discovery, NVLink topology, DCGM health
